@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.Progreso.ms.models.dto.ProgresoDTO;
 import com.Progreso.ms.models.entities.Progreso;
 import com.Progreso.ms.models.request.ActualizarProgreso;
 import com.Progreso.ms.models.request.AgregarProgreso;
@@ -22,41 +23,67 @@ public class ProgresoService {
     @Autowired
     private ProgresoRepository progresoRepository;
 
-    //* Retorna todos los registros de progreso del sistema
-    public List<Progreso> obtenerTodosLosProgresos() {
-        return progresoRepository.findAll();
+    //* Convierte una entidad Progreso a su DTO de respuesta
+    private ProgresoDTO toDTO(Progreso p) {
+        return new ProgresoDTO(
+                p.getId_progreso(),
+                p.getId_usuario(),
+                p.getId_tutorial(),
+                p.getRecursos_completados(),
+                p.getCantidad_recursos_totales(),
+                p.getPreguntas_acertadas(),
+                p.getPreguntas_falladas(),
+                p.getPorcentaje_progreso(),
+                p.getFecha_ultima_actividad()
+        );
     }
 
-    //* Busca un registro de progreso por su ID
+    //* Retorna todos los registros de progreso como DTOs
+    public List<ProgresoDTO> obtenerTodosLosProgresos() {
+        return progresoRepository.findAll()
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    //* Busca un registro de progreso por su ID y retorna el DTO
     //! Lanza HTTP 404 si el ID no existe
-    public Progreso obtenerProgresoPorId(int id_progreso) {
-        return progresoRepository.findById(id_progreso)
+    public ProgresoDTO obtenerProgresoPorId(int id_progreso) {
+        Progreso progreso = progresoRepository.findById(id_progreso)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Progreso no encontrado."));
+        return toDTO(progreso);
     }
 
-    //* Retorna todos los registros de progreso de un usuario específico
-    public List<Progreso> obtenerProgresosPorUsuario(int idUsuario) {
-        return progresoRepository.findByIdUsuario(idUsuario);
+    //* Retorna todos los registros de progreso de un usuario específico como DTOs
+    public List<ProgresoDTO> obtenerProgresosPorUsuario(int idUsuario) {
+        return progresoRepository.findByIdUsuario(idUsuario)
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
-    //* Retorna todos los registros de progreso de un tutorial específico
-    public List<Progreso> obtenerProgresosPorTutorial(int idTutorial) {
-        return progresoRepository.findByIdTutorial(idTutorial);
+    //* Retorna todos los registros de progreso de un tutorial específico como DTOs
+    public List<ProgresoDTO> obtenerProgresosPorTutorial(int idTutorial) {
+        return progresoRepository.findByIdTutorial(idTutorial)
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
-    //* Retorna el progreso de un usuario en un tutorial concreto
+    //* Retorna el progreso de un usuario en un tutorial concreto como DTO
     //! Lanza HTTP 404 si el usuario no ha iniciado ese tutorial
-    public Progreso obtenerProgresoPorUsuarioYTutorial(int idUsuario, int idTutorial) {
-        return progresoRepository.findByIdUsuarioAndIdTutorial(idUsuario, idTutorial)
+    public ProgresoDTO obtenerProgresoPorUsuarioYTutorial(int idUsuario, int idTutorial) {
+        Progreso progreso = progresoRepository.findByIdUsuarioAndIdTutorial(idUsuario, idTutorial)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No se encontró progreso para el usuario " + idUsuario
                         + " en el tutorial " + idTutorial + "."));
+        return toDTO(progreso);
     }
 
-    //* Registra el progreso inicial de un usuario en un tutorial
+    //* Registra el progreso inicial de un usuario en un tutorial y retorna el DTO
     //! Lanza HTTP 409 si ya existe un registro para ese usuario+tutorial
     //! porcentaje_progreso y fecha_ultima_actividad los asigna este método
-    public Progreso agregarProgreso(AgregarProgreso nuevoProgreso) {
+    public ProgresoDTO agregarProgreso(AgregarProgreso nuevoProgreso) {
         Optional<Progreso> existente = progresoRepository
                 .findByIdUsuarioAndIdTutorial(nuevoProgreso.getId_usuario(), nuevoProgreso.getId_tutorial());
         if (existente.isPresent()) {
@@ -75,11 +102,11 @@ public class ProgresoService {
                 nuevoProgreso.getRecursos_completados(),
                 nuevoProgreso.getCantidad_recursos_totales()));
         progreso.setFecha_ultima_actividad(LocalDateTime.now());
-        return progresoRepository.save(progreso);
+        return toDTO(progresoRepository.save(progreso));
     }
 
     //* Actualiza el progreso de un usuario — recalcula porcentaje y timestamp
-    public Progreso actualizarProgreso(int id_progreso, ActualizarProgreso actProgreso) {
+    public ProgresoDTO actualizarProgreso(int id_progreso, ActualizarProgreso actProgreso) {
         Progreso progreso = progresoRepository.findById(id_progreso)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Progreso no encontrado."));
         progreso.setRecursos_completados(actProgreso.getRecursos_completados());
@@ -91,7 +118,7 @@ public class ProgresoService {
                 actProgreso.getRecursos_completados(),
                 actProgreso.getCantidad_recursos_totales()));
         progreso.setFecha_ultima_actividad(LocalDateTime.now());
-        return progresoRepository.save(progreso);
+        return toDTO(progresoRepository.save(progreso));
     }
 
     //* Elimina un registro de progreso por su ID

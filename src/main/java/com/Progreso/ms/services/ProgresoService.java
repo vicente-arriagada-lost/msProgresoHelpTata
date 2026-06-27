@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.Progreso.ms.clients.LogClient;
 import com.Progreso.ms.models.dto.ProgresoDTO;
 import com.Progreso.ms.models.entities.Progreso;
 import com.Progreso.ms.models.request.ActualizarProgreso;
@@ -16,12 +17,14 @@ import com.Progreso.ms.models.request.AgregarProgreso;
 import com.Progreso.ms.repositories.ProgresoRepository;
 
 //* Servicio que encapsula toda la lógica de negocio relacionada al progreso de usuarios
-//? @Service marca esta clase para que Spring la detecte e inyecte donde se necesite
 @Service
 public class ProgresoService {
 
     @Autowired
     private ProgresoRepository progresoRepository;
+
+    @Autowired
+    private LogClient logClient;
 
     //* Convierte una entidad Progreso a su DTO de respuesta
     private ProgresoDTO toDTO(Progreso p) {
@@ -82,7 +85,6 @@ public class ProgresoService {
 
     //* Registra el progreso inicial de un usuario en un tutorial y retorna el DTO
     //! Lanza HTTP 409 si ya existe un registro para ese usuario+tutorial
-    //! porcentaje_progreso y fecha_ultima_actividad los asigna este método
     public ProgresoDTO agregarProgreso(AgregarProgreso nuevoProgreso) {
         Optional<Progreso> existente = progresoRepository
                 .findByIdUsuarioAndIdTutorial(nuevoProgreso.getId_usuario(), nuevoProgreso.getId_tutorial());
@@ -97,12 +99,17 @@ public class ProgresoService {
         progreso.setCantidad_recursos_totales(nuevoProgreso.getCantidad_recursos_totales());
         progreso.setPreguntas_acertadas(nuevoProgreso.getPreguntas_acertadas());
         progreso.setPreguntas_falladas(nuevoProgreso.getPreguntas_falladas());
-        //* Calcula el porcentaje de avance sobre los recursos completados
         progreso.setPorcentaje_progreso(calcularPorcentaje(
                 nuevoProgreso.getRecursos_completados(),
                 nuevoProgreso.getCantidad_recursos_totales()));
         progreso.setFecha_ultima_actividad(LocalDateTime.now());
-        return toDTO(progresoRepository.save(progreso));
+        ProgresoDTO resultado = toDTO(progresoRepository.save(progreso));
+        logClient.registrar("INFO",
+                "Progreso iniciado: usuario=" + nuevoProgreso.getId_usuario()
+                        + ", tutorial=" + nuevoProgreso.getId_tutorial()
+                        + " (" + resultado.porcentaje_progreso() + "%)",
+                nuevoProgreso.getId_usuario(), null);
+        return resultado;
     }
 
     //* Actualiza el progreso de un usuario — recalcula porcentaje y timestamp
@@ -113,12 +120,17 @@ public class ProgresoService {
         progreso.setCantidad_recursos_totales(actProgreso.getCantidad_recursos_totales());
         progreso.setPreguntas_acertadas(actProgreso.getPreguntas_acertadas());
         progreso.setPreguntas_falladas(actProgreso.getPreguntas_falladas());
-        //* Recalcula el porcentaje y actualiza el timestamp en cada modificación
         progreso.setPorcentaje_progreso(calcularPorcentaje(
                 actProgreso.getRecursos_completados(),
                 actProgreso.getCantidad_recursos_totales()));
         progreso.setFecha_ultima_actividad(LocalDateTime.now());
-        return toDTO(progresoRepository.save(progreso));
+        ProgresoDTO resultado = toDTO(progresoRepository.save(progreso));
+        logClient.registrar("INFO",
+                "Progreso actualizado: usuario=" + progreso.getId_usuario()
+                        + ", tutorial=" + progreso.getId_tutorial()
+                        + " → " + resultado.porcentaje_progreso() + "%",
+                progreso.getId_usuario(), null);
+        return resultado;
     }
 
     //* Elimina un registro de progreso por su ID
@@ -133,10 +145,8 @@ public class ProgresoService {
     }
 
     //* Calcula el porcentaje de progreso sobre recursos completados
-    //? Evita división por cero: retorna 0.0 si el total es 0
     private double calcularPorcentaje(int completados, int totales) {
         if (totales == 0) return 0.0;
         return Math.round((completados * 100.0 / totales) * 100.0) / 100.0;
     }
-
 }
